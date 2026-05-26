@@ -43,6 +43,8 @@ export default function TutorPage() {
   const [input, setInput] = useState("");
   const [loadingMsg, setLoadingMsg] = useState(false);
   const [activeTab, setActiveTab] = useState<"plan" | "chat">("plan");
+  const [freeLearnInput, setFreeLearnInput] = useState("");
+  const [freeLearnOpen, setFreeLearnOpen] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -81,6 +83,31 @@ export default function TutorPage() {
       setStudyPlan({ diagnosis: "Erro ao gerar plano", plan: "", courses: [] });
     } finally {
       setLoadingPlan(false);
+    }
+  }
+
+  async function sendFreeLearn() {
+    if (!freeLearnInput.trim() || loadingMsg) return;
+    const prompt = `Crie um material de estudo completo sobre: "${freeLearnInput.trim()}". Adapte ao meu perfil, nível e estilo de aprendizagem. Seja didático e estruturado.`;
+    setFreeLearnInput("");
+    setFreeLearnOpen(false);
+    setActiveTab("chat");
+    const newMessages: Message[] = [...messages, { role: "user", content: prompt }];
+    setMessages(newMessages);
+    setLoadingMsg(true);
+    try {
+      const cefisKey = sessionStorage.getItem("cefis_key");
+      const res = await fetch("/api/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: newMessages, profile, studyPlan, cefisKey }),
+      });
+      const data = await res.json();
+      setMessages([...newMessages, { role: "assistant", content: data.answer }]);
+    } catch {
+      setMessages([...newMessages, { role: "assistant", content: "Desculpe, ocorreu um erro. Tente novamente." }]);
+    } finally {
+      setLoadingMsg(false);
     }
   }
 
@@ -225,6 +252,49 @@ export default function TutorPage() {
 
         {/* Chat Panel */}
         <main className={`flex-1 flex flex-col ${activeTab === "plan" ? "hidden md:flex" : "flex"}`}>
+          {/* Aprendizado Livre */}
+          <div className={`border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 transition-all ${freeLearnOpen ? "p-4" : "px-4 py-2"}`}>
+            <button
+              onClick={() => setFreeLearnOpen(!freeLearnOpen)}
+              className="w-full flex items-center justify-between text-blue-900 font-semibold text-sm"
+            >
+              <span>🎯 Aprendizado Livre — estude o que quiser, do jeito que preferir</span>
+              <span className="text-gray-400 text-xs">{freeLearnOpen ? "▲ recolher" : "▼ expandir"}</span>
+            </button>
+            {freeLearnOpen && (
+              <div className="mt-3">
+                <textarea
+                  value={freeLearnInput}
+                  onChange={(e) => setFreeLearnInput(e.target.value)}
+                  disabled={loadingMsg}
+                  rows={2}
+                  placeholder="Ex: Quero aprender Reforma Tributária em formato de mapa mental com exemplos práticos"
+                  className="w-full border border-blue-200 rounded-xl px-4 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none bg-white disabled:opacity-50"
+                />
+                <div className="flex flex-wrap gap-2 mt-2 items-center justify-between">
+                  <div className="flex flex-wrap gap-1.5">
+                    {["📊 Mapa Mental", "📝 Resumo", "❓ Quiz", "💡 Exercícios Práticos"].map((fmt) => (
+                      <button
+                        key={fmt}
+                        onClick={() => setFreeLearnInput((prev) => prev ? `${prev} — formato: ${fmt}` : `Formato: ${fmt} — `)}
+                        className="text-xs bg-white border border-blue-200 text-blue-700 px-2.5 py-1 rounded-full hover:bg-blue-100 transition-colors"
+                      >
+                        {fmt}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={sendFreeLearn}
+                    disabled={!freeLearnInput.trim() || loadingMsg}
+                    className="px-4 py-1.5 bg-blue-900 text-white text-sm font-semibold rounded-xl hover:bg-blue-800 disabled:opacity-40 transition-all flex-shrink-0"
+                  >
+                    Gerar Conteúdo →
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
             {messages.map((msg, i) => (

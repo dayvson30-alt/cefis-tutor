@@ -6,8 +6,10 @@ import { useRouter } from "next/navigation";
 export default function Home() {
   const router = useRouter();
   const [showLogin, setShowLogin] = useState(false);
+  const [loginTab, setLoginTab] = useState<"credentials" | "key">("credentials");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [apiKey, setApiKey] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -31,6 +33,14 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleKeyLogin(e: React.FormEvent) {
+    e.preventDefault();
+    if (!apiKey.trim()) return;
+    sessionStorage.setItem("cefis_key", apiKey.trim());
+    sessionStorage.removeItem("cefis_user");
+    router.push("/onboarding");
   }
 
   function handleGuest() {
@@ -84,12 +94,14 @@ export default function Home() {
           {!showLogin ? (
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <button
+                type="button"
                 onClick={() => setShowLogin(true)}
-                className="px-8 py-4 bg-white text-blue-900 font-bold rounded-xl hover:bg-blue-50 transition-all shadow-lg text-lg"
+                className="px-8 py-4 bg-white/20 text-white font-bold rounded-xl hover:bg-white/30 transition-all border border-white/50 text-lg shadow-xl backdrop-blur-sm"
               >
                 Entrar com CEFIS
               </button>
               <button
+                type="button"
                 onClick={handleGuest}
                 className="px-8 py-4 bg-white/10 text-white font-semibold rounded-xl hover:bg-white/20 transition-all border border-white/30 text-lg"
               >
@@ -97,38 +109,76 @@ export default function Home() {
               </button>
             </div>
           ) : (
-            <form onSubmit={handleLogin} className="bg-white rounded-2xl p-8 max-w-md mx-auto shadow-2xl text-left fade-in">
-              <h2 className="text-blue-900 font-bold text-xl mb-6 text-center">Entrar com sua conta CEFIS</h2>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">E-mail ou CPF</label>
-                <input
-                  type="text"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="seu@email.com"
-                  required
-                />
+            <div className="bg-white rounded-2xl p-8 max-w-md mx-auto shadow-2xl text-left fade-in">
+              <h2 className="text-blue-900 font-bold text-xl mb-5 text-center">Entrar com CEFIS</h2>
+
+              {/* Tabs */}
+              <div className="flex rounded-xl bg-gray-100 p-1 mb-6">
+                <button
+                  type="button"
+                  onClick={() => { setLoginTab("credentials"); setError(""); }}
+                  className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${loginTab === "credentials" ? "bg-white text-blue-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                >
+                  Email e senha
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setLoginTab("key"); setError(""); }}
+                  className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${loginTab === "key" ? "bg-white text-blue-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                >
+                  Chave da API
+                </button>
               </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Senha</label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="••••••••"
-                  required
-                />
-              </div>
-              {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-blue-900 text-white py-3 rounded-lg font-bold hover:bg-blue-800 disabled:opacity-60 transition-all"
-              >
-                {loading ? "Entrando..." : "Entrar"}
-              </button>
+
+              {loginTab === "credentials" ? (
+                <form onSubmit={handleLogin}>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">E-mail ou CPF</label>
+                    <input
+                      type="text"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="seu@email.com"
+                      required
+                    />
+                  </div>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Senha</label>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="••••••••"
+                      required
+                    />
+                  </div>
+                  {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
+                  <button type="submit" disabled={loading} className="w-full bg-blue-900 text-white py-3 rounded-lg font-bold hover:bg-blue-800 disabled:opacity-60 transition-all">
+                    {loading ? "Entrando..." : "Entrar"}
+                  </button>
+                </form>
+              ) : (
+                <form onSubmit={handleKeyLogin}>
+                  <div className="mb-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Chave da API CEFIS</label>
+                    <input
+                      type="text"
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                      placeholder="Cole sua chave aqui..."
+                      required
+                    />
+                  </div>
+                  <p className="text-xs text-gray-400 mb-4">Encontre sua chave em cefis.com.br → Minha conta → Integrações</p>
+                  <button type="submit" disabled={!apiKey.trim()} className="w-full bg-blue-900 text-white py-3 rounded-lg font-bold hover:bg-blue-800 disabled:opacity-60 transition-all">
+                    Entrar com a chave
+                  </button>
+                </form>
+              )}
+
               <button
                 type="button"
                 onClick={() => setShowLogin(false)}
@@ -136,7 +186,7 @@ export default function Home() {
               >
                 Cancelar
               </button>
-            </form>
+            </div>
           )}
         </div>
       </main>

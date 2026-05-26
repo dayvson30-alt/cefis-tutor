@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import ragData from "../../../data/rag_index.json";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -11,29 +12,16 @@ interface RagEntry {
   tx: string;
 }
 
-let ragIndex: RagEntry[] | null = null;
+const ragIndex = ragData as RagEntry[];
 
-async function loadRagIndex(): Promise<RagEntry[]> {
-  if (ragIndex) return ragIndex;
-  try {
-    const { readFile } = await import("fs/promises");
-    const { join } = await import("path");
-    const raw = await readFile(join(process.cwd(), "data", "rag_index.json"), "utf-8");
-    ragIndex = JSON.parse(raw);
-    return ragIndex!;
-  } catch {
-    return [];
-  }
-}
-
-function searchIndex(index: RagEntry[], query: string, topK = 4): RagEntry[] {
+function searchIndex(query: string, topK = 4): RagEntry[] {
   const keywords = query
     .toLowerCase()
     .split(/\s+/)
     .filter((w) => w.length > 3);
   if (keywords.length === 0) return [];
 
-  const scored = index.map((entry) => {
+  const scored = ragIndex.map((entry) => {
     const searchable = `${entry.ct} ${entry.lt} ${entry.tx}`.toLowerCase();
     const score = keywords.reduce((acc, kw) => {
       const count = (searchable.match(new RegExp(kw, "g")) || []).length;
@@ -57,14 +45,19 @@ export async function POST(req: NextRequest) {
       .filter((m) => m.role === "user")
       .pop()?.content || "";
 
-  const index = await loadRagIndex();
-  const results = searchIndex(index, lastUserMsg);
+  const results = searchIndex(lastUserMsg);
 
   const contextText = results.length > 0
     ? results
         .map((r) => `[Curso: ${r.ct} | Aula: ${r.lt}]\n${r.tx}`)
         .join("\n\n---\n\n")
     : "";
+
+  const STYLE_INSTRUCTIONS: Record<string, string> = {
+    visual: "Use listas, tabelas, estruturas visuais em texto e formatação clara",
+    auditory: "Explique de forma conversacional, como se estivesse falando diretamente",
+    kinesthetic: "Foque em exemplos práticos, exercícios e aplicações reais",
+  };
 
   const systemPrompt = `Você é o Tutor IA da CEFIS, especialista educacional personalizado.
 Responda em português brasileiro de forma didática, motivadora e adaptada ao perfil do aluno.
@@ -73,26 +66,24 @@ PERFIL DO ALUNO:
 - Objetivo: ${profile?.goal || "não informado"}
 - Nível: ${profile?.level || "não informado"}
 - Estilo de aprendizagem: ${profile?.learningStyle || "não informado"}
+${profile?.learningStyle ? `- Instrução de estilo: ${STYLE_INSTRUCTIONS[profile.learningStyle] || ""}` : ""}
 
 CURSOS NO PLANO DE ESTUDOS:
 ${studyPlan?.courses?.map((c: { title: string }) => `- ${c.title}`).join("\n") || "nenhum definido"}
 
 ${
   contextText
-    ? `CONTEÚDO REAL DAS TRANSCRIÇÕES DA CEFIS (use isso para responder com precisão):
+    ? `CONTEÚDO REAL DAS TRANSCRIÇÕES DA CEFIS (use para responder com precisão):
 ${contextText}`
-    : "Obs: Conteúdo das transcrições não disponível para esta pergunta — use seu conhecimento."
+    : "Obs: Sem transcrição correspondente — use conhecimento geral."
 }
 
 ${cefisKey ? "O aluno está autenticado na plataforma CEFIS." : ""}
 
 Instruções:
-- Se tiver transcrições, baseie sua resposta nelas e cite o curso/aula
+- Se tiver transcrições, baseie sua resposta nelas e cite o curso/aula pelo nome
 - Crie exercícios, resumos, quizzes e mapas mentais quando pedido
-- Para estilo visual: use listas, tabelas e estruturas visuais
-- Para estilo auditivo: explique conversacionalmente como se estivesse falando
-- Para estilo prático: foque em exemplos e exercícios práticos
-- Sempre termine com uma pergunta de engajamento ou sugestão do próximo passo`;
+- Seja motivador, objetivo e sempre sugira o próximo passo`;
 
   const claudeMessages = (
     messages as { role: string; content: string }[]
